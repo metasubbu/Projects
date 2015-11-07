@@ -1,0 +1,258 @@
+
+-- Creation of Database
+create database alliance;
+
+
+-- Creation of Table masternodelist
+Create Table masternodelist (
+
+	prim_cusip varchar(5),
+	innet tinyint,
+	ln_sales varchar(7),
+	name varchar(50),
+    primary key (prim_cusip)
+    
+	
+)
+
+-- Load the data from CSV. 
+LOAD DATA LOCAL INFILE 'C:/Subbu/UIC Stuff/CourseWork/Sem1/ADBMS/Homework 1/Data/SoftwareAlliancesData/SoftwareAlliancesMasterNodeList.csv'  INTO TABLE  masternodelist
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES 
+(prim_cusip,innet,ln_sales,name);
+
+
+-- Creation of Table Consolidated Edgeist 2006-2009
+
+Create Table edgelist (
+
+	cusip1 varchar(5),
+	cusip2 varchar(5),
+	year year,	
+	primary key(cusip1,cusip2,year)
+) 
+
+
+-- Load the data from CSV. 
+LOAD DATA LOCAL INFILE 'C:/Subbu/UIC Stuff/CourseWork/Sem1/ADBMS/Homework 1/Data/SoftwareAlliancesData/EdgeList_1999_2009_consolidated.csv'  INTO TABLE  edgelist
+CHARACTER SET utf8
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n'
+IGNORE 1 LINES 
+(cusip1, cusip2, year);
+
+-- Creation of Table Firmmetrics
+Create table FirmMetrics(
+year varchar(5),
+cusip varchar(10),
+conm varchar(60),
+currassets numeric(12,2),
+total_assets numeric(12,2),
+sharesout numeric(12,2),
+ltdebt numeric(12,2),
+employees numeric(10,2),
+invent numeric(12,2),
+current_liabilities numeric(12,2),
+operincome numeric(12,2),
+physcap numeric(12,2),
+pref_stock numeric(7,2),
+sales numeric(12,2),
+adv numeric(12,2),
+rd numeric(12,2),
+naicsh numeric,
+stock_price numeric(12,2),
+naics numeric,
+naics3d numeric,
+naics2d numeric,
+naics4d numeric,
+naics1d numeric,
+prim_cusip varchar(12),
+primary key(prim_cusip,cusip,year)
+);
+
+-- Load the data from CSV. 
+LOAD DATA INFILE 'C:/Subbu/UIC Stuff/CourseWork/Sem1/ADBMS/Homework 1/Data/SoftwareAlliancesData/FirmMetrics2006-2010-1.csv'  INTO TABLE  FirmMetrics
+CHARACTER SET utf8
+FIELDS TERMINATED BY ',' enclosed by '' escaped by '\\'
+LINES TERMINATED BY '\r' starting by ''
+IGNORE 1 LINES
+(year, cusip, conm, currassets, total_assets, sharesout, ltdebt, employees, invent, current_liabilities, operincome, physcap, pref_stock, sales, adv, rd, naicsh, stock_price, naics, naics3d, naics2d, naics4d, naics1d, prim_cusip);
+
+
+-- Updation of the Table Firmmetrics with a new Coulumn invest_prop
+alter table firmmetrics add invest_prop numeric(12,8);
+update firmmetrics set invest_prop = (rd+adv+physcap)/total_assets;
+
+
+
+-- Creation of a New Table  updatededgelist containing information on Innets of the firms in alliance from a view
+create view updatededgelistview as select e.cusip1, m1.innet as innet1, e.cusip2, m2.innet as innet2, e.year, m1.innet+m2.innet as innetsum from edgelist e , masternodelist m1 , masternodelist m2 where e.cusip1 = m1.prim_cusip and e.cusip2 = m2.prim_cusip ;
+create table updatededgelist as select * from updatededgelistview;
+select * from updatededgelist;
+
+
+-- Creation of a New Table  updatededgelist2 containing a new metric investprop_avg as a function
+-- of only a S/W companies invest_prop
+create table updatededgelist2 as select e.year, e.cusip1, e.innet1, f1.invest_prop as invest_prop1, e.cusip2, e.innet2, f2.invest_prop as invest_prop2, innetsum from updatededgelist e, firmmetrics f1, firmmetrics f2 where e.cusip1=f1.prim_cusip and e.year=f1.year and e.cusip2=f2.prim_cusip and e.year=f2.year;
+alter table updatededgelist2 add investprop_avg numeric(12,8); 
+
+update updatededgelist2 
+set investprop_avg = case when innet1 = 1 and innet2 =1 then (invest_prop1+invest_prop2)/2 
+						  when innet1 = 1 and innet2 = 0 then invest_prop1 
+                          when innet1 = 0 and innet2 = 1 then invest_prop2
+						end;
+
+-- Altering the Table to insert new column that shows the Type of alliance
+alter table updatededgelist2 add AllianceType varchar(18);
+
+update updatededgelist2 
+set Alliancetype = case when innet1 = 1 and innet2 =1 then "within software"
+						  when innet1 = 1 and innet2 = 0 then "Outside software"
+                          when innet1 = 0 and innet2 = 1 then "Outside software"
+						end;
+
+
+
+select * from updatededgelist2;
+
+-- Exporting data for S/w to S/w alliance by the year
+
+create table sw2006  AS select * from updatededgelist2 where alliancetype="within software" and year=2006; select * from sw2006  INTO OUTFILE 'C:/Subbu/UIC Stuff/CourseWork/Sem1/ADBMS/Homework 1/exportdata/sw2006.csv' FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' LINES TERMINATED BY '\n';
+
+create table sw2007  AS select * from updatededgelist2 where alliancetype="within software" and year=2007; select * from sw2007  INTO OUTFILE 'C:/Subbu/UIC Stuff/CourseWork/Sem1/ADBMS/Homework 1/exportdata/sw2007.csv' FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' LINES TERMINATED BY '\n';
+
+create table sw2008  AS select * from updatededgelist2 where alliancetype="within software" and year=2008; select * from sw2008  INTO OUTFILE 'C:/Subbu/UIC Stuff/CourseWork/Sem1/ADBMS/Homework 1/exportdata/sw2008.csv' FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' LINES TERMINATED BY '\n';
+
+create table sw2009  AS select * from updatededgelist2 where alliancetype="within software" and year=2009; select * from sw2009  INTO OUTFILE 'C:/Subbu/UIC Stuff/CourseWork/Sem1/ADBMS/Homework 1/exportdata/sw2009.csv' FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' LINES TERMINATED BY '\n';
+
+-- Exporting data for S/w to Other alliance by the year
+
+
+create table osw2006  AS select * from updatededgelist2 where alliancetype="Outside software" and year=2006; select * from osw2006  INTO OUTFILE 'C:/Subbu/UIC Stuff/CourseWork/Sem1/ADBMS/Homework 1/exportdata/osw2006.csv' FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' LINES TERMINATED BY '\n';
+
+create table osw2007  AS select * from updatededgelist2 where alliancetype="Outside software" and year=2007; select * from osw2007  INTO OUTFILE 'C:/Subbu/UIC Stuff/CourseWork/Sem1/ADBMS/Homework 1/exportdata/osw2007.csv' FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' LINES TERMINATED BY '\n';
+
+create table osw2008  AS select * from updatededgelist2 where alliancetype="Outside software" and year=2008; select * from osw2008  INTO OUTFILE 'C:/Subbu/UIC Stuff/CourseWork/Sem1/ADBMS/Homework 1/exportdata/osw2008.csv' FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' LINES TERMINATED BY '\n';
+
+create table osw2009  AS select * from updatededgelist2 where alliancetype="Outside software" and year=2009; select * from osw2009  INTO OUTFILE 'C:/Subbu/UIC Stuff/CourseWork/Sem1/ADBMS/Homework 1/exportdata/osw2009.csv' FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' LINES TERMINATED BY '\n';
+
+----- End of Question 1 ---
+
+-- Creation of Firm Performance Metrics, the variable performance is TobinsQ, roa is return on asset defined as sales/assets
+select * from firmmetrics;
+
+
+-- Update tobinsq
+alter table firmmetrics add performance numeric;
+
+-- alter table firmmetrics drop performance;
+
+update firmmetrics set performance = (pref_stock + (stock_price* sharesout) +  current_liabilities - currassets + invent + ltdebt)/(total_assets)
+
+--  Update ROA
+alter table firmmetrics add roa numeric;
+
+update firmmetrics set roa = sales/total_assets;
+
+-- Joining Edgemetrics with the new metrics performance, roa, sales, operating income and stockprice
+
+create table updatededgelist3 as select distinct e.year, e.cusip1, e.innet1, f1.performance as perf1, f1.roa as roa1, f1.sales as sales1, f1.operincome as operincome1, f1.stock_price as stockprice1, e.cusip2, e.innet2, f2.performance as perf2, f2.roa as roa2, f2.sales as sales2, f2.operincome as operincome2, f2.stock_price as stockprice2
+from updatededgelist2 e, firmmetrics f1, firmmetrics f2
+where
+e.cusip1=f1.prim_cusip and e.year=f1.year and
+e.cusip2=f2.prim_cusip and e.year=f2.year;
+
+----- Alliance Counter
+
+-- Creation of a Table containing distinct # of cusip and year combos for firms that have alliances
+create table edgelist2 as select cusip2, cusip1, year from edgelist;
+
+create view bleh as select * from edgelist
+union all
+select * from edgelist2;
+
+
+create table edgelist3 as select distinct * from bleh;
+ALTER TABLE edgelist3
+  ADD CONSTRAINT bleh primary key (cusip1,cusip2,year);
+
+
+-- End edgelist3
+
+create table allianncecounter as select distinct e1.cusip1,count(e1.cusip1) as count1, e1.year from edgelist3 e1, edgelist3 e2
+where e1.cusip1=e2.cusip1 and e1.year=e2.year group by e1.cusip1,e1.cusip2,e1.year;
+
+select * from allianncecounter;
+
+-- end of Alliancecounter
+
+-- Creation of SW-SW and SW-NonSW alliance Countrs
+
+create table edgelist2 as select cusip2, innet2, cusip1, innet1, year, innetsum from updatededgelist;
+
+create view bleh1 as 
+select * from updatededgelist
+union all
+select * from edgelist2;
+
+select * from bleh1;
+
+create table edgelist3 as select distinct * from bleh1;
+ALTER TABLE edgelist3
+  ADD CONSTRAINT bleh primary key (cusip1,cusip2,year);
+
+
+select * from edgelist3;
+
+
+create table sw_sw_all_counter as select distinct e1.cusip1,count(e1.cusip1) as count1, e1.year from edgelist3 e1, edgelist3 e2
+where e1.cusip1=e2.cusip1 and e1.year=e2.year and e1.innetsum=2 group by e1.cusip1,e1.cusip2,e1.year;
+ALTER TABLE sw_sw_all_counter
+  ADD CONSTRAINT bleh primary key (cusip1,year);
+
+
+create table sw_nonsw_all_counter as select distinct e1.cusip1,count(e1.cusip1) as count1, e1.year from edgelist3 e1, edgelist3 e2
+where e1.cusip1=e2.cusip1 and e1.year=e2.year and e1.innetsum=1 group by e1.cusip1,e1.cusip2,e1.year;
+
+ALTER TABLE sw_nonsw_all_counter
+  ADD CONSTRAINT bleh primary key (cusip1,year);
+
+-- End
+
+-- non sw counter according to investprop
+create view yo as select distinct e1.cusip1,count(e1.cusip1) as count1,e1.innet1, e1.year from edgelist3 e1, edgelist3 e2
+where e1.cusip1=e2.cusip1 and e1.year=e2.year and e1.innetsum=1 group by e1.cusip1,e1.cusip2,e1.year;
+
+
+create table nswcinves as select distinct e.cusip1, e.count1, e.year, f.invest_prop from yo e, firmmetrics f
+where e.cusip1=f.prim_cusip and e.year=f.year and e.innet1=1;
+
+select * from nswcinves;
+
+
+-- sw counter according to investprop
+
+create table swcinves as select e.cusip1, c.count1, e.year, f.investprop_avg from edgelist3 e, updatededgelist2 f, sw_sw_all_counter c
+where e.cusip1=f.cusip1 and e.year=f.year and f.innetsum=2 and e.cusip1=c.cusip1 and e.year=c.year;
+
+select * from nswcinves
+select * from updatededgelist2 
+-- Counters End
+-- solution to part 3
+
+-- creation of a new table that has performance and naics informaion on allied firms
+
+create table sol3 as select distinct e.year, e.cusip1, e.innet1, f1.naics2d as n1,f1.performance as perf1, f1.roa as roa1, f1.sales as sales1, f1.operincome as operincome1, f1.stock_price as stockprice1, e.cusip2, e.innet2, f2.naics2d as n2,f2.performance as perf2, f2.roa as roa2, f2.sales as sales2, f2.operincome as operincome2, f2.stock_price as stockprice2
+from updatededgelist2 e, firmmetrics f1, firmmetrics f2
+where
+e.cusip1=f1.prim_cusip and e.year=f1.year and
+e.cusip2=f2.prim_cusip and e.year=f2.year;
+
+create table sol3ans select * from sol3
+where (select n1 in (31,32,33,51,52,62,55,42,45,54,44) and n2 in (31,32,33,51,52,62,55,42,45,54,44));
+
+ select * from sol3;
+select * from sol3ans;
+
+-- ---The end----- -----
