@@ -1,0 +1,38 @@
+library(RCurl)
+library(XML)
+
+trim <- function(x) gsub("^\\s+|\\s+$", "", x)
+YouMah.Complete<-NA
+## YouTube Channel info. Change front_url value to channel that needs to be analyzed
+url<-"https://www.youtube.com"
+front_url<-"https://www.youtube.com/user/KraftCookingSchool/videos?live_view=5&flow=list&view=0&sort=dd"
+
+	page_num<-1
+	site<-paste(front_url,page_num,sep="")
+	web.code<-getURLContent(site,ssl.verifypeer = FALSE)
+	web.html<-htmlTreeParse(web.code,asText=T,useInternalNodes=T)
+  
+  ##Scrap Video Titles & Video_Urls.
+	title<-xpathSApply(web.html,"//a[@class='yt-uix-sessionlink yt-uix-tile-link  spf-link  yt-ui-ellipsis yt-ui-ellipsis-2']",xmlValue)
+	title_link<-xpathSApply(web.html,"//a[@class='yt-uix-sessionlink yt-uix-tile-link  spf-link  yt-ui-ellipsis yt-ui-ellipsis-2']/@href")
+	YouMah<-data.frame(Title=title,link=title_link)
+
+	##extracting information on each video
+	###loop for each video
+	for (vid in 1:length(title)){
+		view_url<-paste(url,title_link[[vid]],sep="")
+		view.code<-getURL(view_url,ssl.verifypeer=FALSE)
+		view.html<-htmlTreeParse(view.code,asText=T,useInternalNodes=T)
+		
+		#unavailable.message<-xpathSApply(view.html,"//h1[@id='unavailable-message']",xmlValue)
+		#view count
+		view.count<-xpathSApply(view.html,"//div[@class='watch-view-count']",xmlValue)
+		if(length(view.count)>0){
+			YouMah$view.count[vid]<-gsub(" views","",view.count)
+		}else{
+			YouMah$view.count[vid]<-NA
+		}
+		
+	
+	}
+
